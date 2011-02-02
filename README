@@ -1,5 +1,11 @@
-it would be more rigorous to repeatedly sample from the data and see how variable the selected variables are
+late-night implementation of variable selection approach as described in
 
-it isnt entirely clear which is the proper way to normalise x and y before starting the algorithm
+    MLPs (Mono-Layer Polynomials and Multi-Layer Perceptrons) for Nonlinear Modeling
+    Isabelle Rivals, L\'eon Personnaz
+    http://jmlr.csail.mit.edu/papers/volume3/rivals03a/rivals03a.pdf
 
-it also isnt clear how to choose the max_degree ...
+todo:
+
+	* it would be more rigorous to repeatedly sample from the data and see how variable the selected variables are
+	* it isnt entirely clear which is the proper way to normalise x and y before starting the algorithm
+	* it also isnt clear how to choose the max_degree ...
