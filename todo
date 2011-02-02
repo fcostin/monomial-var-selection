@@ -1,0 +1,5 @@
+it would be more rigorous to repeatedly sample from the data and see how variable the selected variables are
+
+it isnt entirely clear which is the proper way to normalise x and y before starting the algorithm
+
+it also isnt clear how to choose the max_degree ...
