@@ -8,6 +8,7 @@ late-night implementation of variable selection approach as described in
 
 import csv
 import numpy
+import random
 
 def get_cols(file_name):
     rows = []
@@ -69,13 +70,50 @@ def fancy_multi_index_name(alpha, names):
 def main():
     numpy.seterr(invalid = 'raise')
 
-    file_name = 'foo.csv' # real file name here
-
-    max_degree = 5
+    file_name = 'tensile-strength-177c.csv' # real file name here
 
     cols, header = get_cols(file_name)
     x, y = xy_from_cols(cols, header)
 
+    test_fraction = 1.0 / 3.0
+    test_size = int(len(y) * test_fraction)
+    
+    n_iters = 25
+
+    ranks = {}
+
+    for iter in xrange(n_iters):
+        test_indices = random.sample(xrange(len(y)), test_size)
+        test_mask = numpy.zeros(len(y), dtype = numpy.bool)
+        test_mask[test_indices] = True
+        training_mask = numpy.logical_not(test_mask)
+        x_test = x[:, test_mask]
+        y_test = y[test_mask]
+        x_training = x[:, training_mask]
+        y_training = y[training_mask]
+        shortlist = shortlist_variables(
+            x_training,
+            y_training,
+            header,
+            max_degree = 3,
+            shortlist_length = 10,
+        )
+        for i, var in enumerate(shortlist):
+            if var not in ranks:
+                ranks[var] = [i]
+            else:
+                ranks[var].append(i)
+    
+    shortlist = list(sorted(ranks.keys()))
+    shortlist_length = len(shortlist)
+    proximity = numpy.zeros((shortlist_length, ) * 2, dtype = numpy.float)
+    for i, u in enumerate(shortlist):
+        for j, v in enumerate(shortlist):
+            proximity[i, j] = numpy.abs(cosine_similarity(u, v))
+    distance = 1.0 - proximity
+    
+
+def shortlist_variables(x, y, header, max_degree, shortlist_length):
     # how to normalise things? (THIS CHANGES STUFF A LOT!)
     # x = x - numpy.mean(x, axis = 1)[:, numpy.newaxis]
     x_var = numpy.var(x, axis = 1)
@@ -99,7 +137,7 @@ def main():
     pc_complete = 0
     for i, alpha in enumerate(all_indices):
         monomials[alpha] = make_monomial(x, alpha)
-        current_pc_complete = int(100.0 * i / n_indices)
+        current_pc_complete = int(10.0 * i / n_indices) * 10
         if current_pc_complete > pc_complete:
             pc_complete = current_pc_complete
             print '%d %% complete' % pc_complete
@@ -112,7 +150,7 @@ def main():
 
     # rank scores in decreasing order
     basis = []
-    basis_size = min(50, len(y) - 1)
+    basis_size = min(shortlist_length, len(y) - 1)
     y_norms = [numpy.linalg.norm(y)]
     while len(basis) < basis_size:
         scores = compute_scores(monomials, y)
@@ -138,6 +176,9 @@ def main():
 
         print '[%3d] chose %s with score %.3f; norm of residual is %.3f' % (len(basis), fancy_multi_index_name(alpha, x_header), score, y_norm)
 
+    return basis
+
+def plot_ynorms(ynorms, max_degree):
     import pylab
     pylab.plot(y_norms, 'o-')
     pylab.xlabel('basis size')
