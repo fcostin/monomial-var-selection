@@ -88,6 +88,14 @@ def make_rows_from_distance_matrix(distance, row_names, col_names):
         rows.append([name] + list(row))
     return rows
 
+def make_rows_from_vectors(vectors, row_names):
+    rows = []
+    n_cols = len(vectors[0])
+    rows.append([''] * (1 + n_cols))
+    for name, row in zip(row_names, vectors):
+        rows.append([name] + list(row))
+    return rows
+
 def save_rows_as_csv(rows, out_file):
     writer = csv.writer(out_file, quoting = csv.QUOTE_NONNUMERIC)
     writer.writerows(rows)
@@ -114,7 +122,7 @@ def main():
     test_fraction = 1.0 / 3.0
     test_size = int(len(y) * test_fraction)
     
-    n_iters = 100
+    n_iters = 15
 
     ranks = {}
     
@@ -132,7 +140,7 @@ def main():
             y_training,
             header,
             max_degree = 3,
-            shortlist_length = 10,
+            shortlist_length = 25,
         )
         for i, alpha in enumerate(shortlist):
             fancy_name = fancy_multi_index_name(alpha, x_header)
@@ -145,8 +153,10 @@ def main():
     shortlist = list(sorted(ranks.keys()))
     shortlist_length = len(shortlist)
     proximity = numpy.zeros((shortlist_length, ) * 2, dtype = numpy.float)
+    vectors = []
     for i, alpha in enumerate(shortlist):
         m_alpha = make_monomial(x, alpha)
+        vectors.append(m_alpha)
         for j, beta in enumerate(shortlist):
             m_beta = make_monomial(x, beta)
             proximity[i, j] = numpy.abs(cosine_similarity(m_alpha, m_beta))
@@ -177,6 +187,15 @@ def main():
         ),
         open('distance.csv', 'w'),
     )
+
+    save_rows_as_csv(
+        make_rows_from_vectors(
+            vectors,
+            shortlist_names,
+        ),
+        open('vectors.csv', 'w'),
+    )
+
 
     plot_distance_matrix(distance)
 
