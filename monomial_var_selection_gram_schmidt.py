@@ -65,7 +65,42 @@ def cosine_similarity(x, y):
         return numpy.dot(x, y) / (numpy.linalg.norm(x) * numpy.linalg.norm(y))
 
 def fancy_multi_index_name(alpha, names):
-    return ' '.join('%s^%d' % (name, exponent) for (name, exponent) in zip(names, alpha) if exponent > 0)
+    return '*'.join('%s^%d' % (name, exponent) for (name, exponent) in zip(names, alpha) if exponent > 0)
+
+def extract_alpha_from_fancy_name(name, var_names):
+    """
+    blimey!
+    """
+    exponents = {}
+    for token in set(name.split('*')):
+        if token == '':
+            continue
+        var_name, exponent = token.split('^')
+        exponent = int(exponent)
+        assert var_name in var_names
+        exponents[var_name] = exponent
+    return tuple([exponents.get(var_name, 0) for var_name in var_names])
+
+def make_rows_from_distance_matrix(distance, row_names, col_names):
+    rows = []
+    rows.append([''] + col_names)
+    for name, row in zip(row_names, distance):
+        rows.append([name] + list(row))
+    return rows
+
+def save_rows_as_csv(rows, out_file):
+    writer = csv.writer(out_file, quoting = csv.QUOTE_NONNUMERIC)
+    writer.writerows(rows)
+
+def mangle_name(s):
+    s = s.replace('wt.%', '')
+    s = s.replace('ppm', '')
+    s = s.replace('^', '')
+    s = s.replace('*', '.')
+    s = ''.join(c for c in s if (c.isalnum() or c == '.'))
+    if s == '':
+        s = '(intercept)'
+    return s
 
 def main():
     numpy.seterr(invalid = 'raise')
@@ -74,14 +109,15 @@ def main():
 
     cols, header = get_cols(file_name)
     x, y = xy_from_cols(cols, header)
+    x_names = header[1:-1]
 
     test_fraction = 1.0 / 3.0
     test_size = int(len(y) * test_fraction)
     
-    n_iters = 25
+    n_iters = 100
 
     ranks = {}
-
+    
     for iter in xrange(n_iters):
         test_indices = random.sample(xrange(len(y)), test_size)
         test_mask = numpy.zeros(len(y), dtype = numpy.bool)
@@ -91,27 +127,69 @@ def main():
         y_test = y[test_mask]
         x_training = x[:, training_mask]
         y_training = y[training_mask]
-        shortlist = shortlist_variables(
+        shortlist, x_header = shortlist_variables(
             x_training,
             y_training,
             header,
             max_degree = 3,
             shortlist_length = 10,
         )
-        for i, var in enumerate(shortlist):
-            if var not in ranks:
-                ranks[var] = [i]
+        for i, alpha in enumerate(shortlist):
+            fancy_name = fancy_multi_index_name(alpha, x_header)
+            global_alpha = extract_alpha_from_fancy_name(fancy_name, x_names)
+            if global_alpha not in ranks:
+                ranks[global_alpha] = [i]
             else:
-                ranks[var].append(i)
-    
+                ranks[global_alpha].append(i)
+
     shortlist = list(sorted(ranks.keys()))
     shortlist_length = len(shortlist)
     proximity = numpy.zeros((shortlist_length, ) * 2, dtype = numpy.float)
-    for i, u in enumerate(shortlist):
-        for j, v in enumerate(shortlist):
-            proximity[i, j] = numpy.abs(cosine_similarity(u, v))
+    for i, alpha in enumerate(shortlist):
+        m_alpha = make_monomial(x, alpha)
+        for j, beta in enumerate(shortlist):
+            m_beta = make_monomial(x, beta)
+            proximity[i, j] = numpy.abs(cosine_similarity(m_alpha, m_beta))
     distance = 1.0 - proximity
+
     
+    def check_uniqueness(a):
+        if not len(set(a)) == len(a):
+            for x in sorted(a):
+                print str(x)
+            raise ValueError('uniqueness failure')
+
+    check_uniqueness(x_names)
+    check_uniqueness(shortlist)
+    shortlist_names = [fancy_multi_index_name(alpha, x_names) for alpha in shortlist]
+    check_uniqueness(shortlist_names)
+    shortlist_names = [mangle_name(name) for name in shortlist_names]
+    check_uniqueness(shortlist_names)
+
+    for name in sorted(shortlist_names):
+        print name
+    
+    save_rows_as_csv(
+        make_rows_from_distance_matrix(
+            distance,
+            shortlist_names,
+            shortlist_names,
+        ),
+        open('distance.csv', 'w'),
+    )
+
+    plot_distance_matrix(distance)
+
+
+def plot_distance_matrix(distance):
+    import pylab
+    pylab.imshow(
+        distance,
+        interpolation = 'nearest',
+    )
+    pylab.colorbar()
+    pylab.show()
+
 
 def shortlist_variables(x, y, header, max_degree, shortlist_length):
     # how to normalise things? (THIS CHANGES STUFF A LOT!)
@@ -176,7 +254,7 @@ def shortlist_variables(x, y, header, max_degree, shortlist_length):
 
         print '[%3d] chose %s with score %.3f; norm of residual is %.3f' % (len(basis), fancy_multi_index_name(alpha, x_header), score, y_norm)
 
-    return basis
+    return basis, x_header
 
 def plot_ynorms(ynorms, max_degree):
     import pylab
